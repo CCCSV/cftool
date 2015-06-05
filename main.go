@@ -137,14 +137,14 @@ func main() {
 	var region string
 	var verbose bool
 	var interval int
-	var defaults bool
+	var prompt bool
 
 	flag.StringVar(&region, "region", "us-west-2", "AWS region to provision script to.")
 	flag.StringVar(&templateFile, "template", "", "Template to validate.")
 	flag.StringVar(&stackName, "name", "", "Stack name (required).")
 	flag.BoolVar(&outputCost, "cost", false, "Output cost URL.")
 	flag.BoolVar(&provision, "provision", false, "Provision template.")
-	flag.BoolVar(&defaults, "defaults", false, "Use default params")
+	flag.BoolVar(&prompt, "prompt", false, "Prompt for param values")
 	flag.BoolVar(&desc, "desc", false, "Describe stack.")
 	flag.BoolVar(&del, "del", false, "Delete stack.")
 	flag.BoolVar(&status, "watch", false, "")
@@ -185,14 +185,8 @@ func main() {
 		params = make([]*awscf.Parameter, len(resp.Parameters))
 
 		// fill out the parameters from the template
-		if defaults {
-			for i, p := range resp.Parameters {
-				params[i] = &awscf.Parameter{
-					ParameterKey:   p.ParameterKey,
-					ParameterValue: p.DefaultValue,
-				}
-			}
-		} else {
+		// using either user prompting or defaults
+		if prompt {
 			stdin := bufio.NewReader(os.Stdin)
 			for i, p := range resp.Parameters {
 				fmt.Printf("%v (%v): ", awsutil.StringValue(p.Description), awsutil.StringValue(p.DefaultValue))
@@ -214,6 +208,37 @@ func main() {
 				} else {
 					params[i].ParameterValue = p.DefaultValue
 				}
+			}
+		} else { // using default values plus any overrides passed on command line
+			overrides := make(map[string]string)
+			args := flag.Args()
+			if len(args)%2 == 0 {
+				for i := 0; i < len(args); i++ {
+					overrides[args[i]] = args[i+1]
+					i++
+				}
+			} else {
+				fmt.Printf("ERROR: If passing template parameters on command line, must be even number of keys and values")
+				os.Exit(1)
+			}
+			for i, p := range resp.Parameters {
+				params[i] = &awscf.Parameter{
+					ParameterKey:   p.ParameterKey,
+					ParameterValue: p.DefaultValue,
+				}
+				if val, ok := overrides[*p.ParameterKey]; ok {
+					params[i].ParameterValue = aws.String(val)
+					fmt.Printf("Overriding %s -> %s\n", *p.ParameterKey, val)
+					delete(overrides, *p.ParameterKey)
+				}
+			}
+			if len(overrides) != 0 {
+				fmt.Println("ERROR: override params passed on command line but not found in template")
+				fmt.Println("Unused params listed below")
+				for k, v := range overrides {
+					fmt.Printf("param %s value %s\n", k, v)
+				}
+				os.Exit(1)
 			}
 		}
 	}
