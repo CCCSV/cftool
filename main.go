@@ -147,7 +147,7 @@ func main() {
 	flag.BoolVar(&prompt, "prompt", false, "Prompt for param values")
 	flag.BoolVar(&desc, "desc", false, "Describe stack.")
 	flag.BoolVar(&del, "del", false, "Delete stack.")
-	flag.BoolVar(&status, "watch", false, "")
+	flag.BoolVar(&status, "w", false, "")
 	flag.BoolVar(&verbose, "v", false, "Verbose output for watch")
 	flag.IntVar(&interval, "i", 5, "Polling interval in seconds for watch")
 	flag.Parse()
