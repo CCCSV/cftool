@@ -21,13 +21,13 @@ import (
 	awscf "github.com/aws/aws-sdk-go/service/cloudformation"
 )
 
-func provisionStack(svc *awscf.CloudFormation, b []byte, params []*awscf.Parameter, stackName string) {
+func provisionStack(svc *awscf.CloudFormation, b []byte, onFailure string, params []*awscf.Parameter, stackName string) {
 	input := &awscf.CreateStackInput{
 		StackName: aws.String(stackName),
 		Capabilities: []*string{
 			aws.String("CAPABILITY_IAM"),
 		},
-		OnFailure:        aws.String("DELETE"),
+		OnFailure:        aws.String(onFailure),
 		Parameters:       params,
 		TemplateBody:     aws.String(string(b)),
 		TimeoutInMinutes: aws.Long(20),
@@ -138,12 +138,14 @@ func main() {
 	var verbose bool
 	var interval int
 	var prompt bool
+	var onFailure string
 
 	flag.StringVar(&region, "region", "us-west-2", "AWS region to provision script to.")
 	flag.StringVar(&templateFile, "template", "", "Template to validate.")
 	flag.StringVar(&stackName, "name", "", "Stack name (required).")
 	flag.BoolVar(&outputCost, "cost", false, "Output cost URL.")
 	flag.BoolVar(&provision, "provision", false, "Provision template.")
+	flag.StringVar(&onFailure, "onfail", "ROLLBACK", "what to do on provisioning failure ROLLBACK/DELETE/DO_NOTHING")
 	flag.BoolVar(&prompt, "prompt", false, "Prompt for param values")
 	flag.BoolVar(&desc, "desc", false, "Describe stack.")
 	flag.BoolVar(&del, "del", false, "Delete stack.")
@@ -156,6 +158,12 @@ func main() {
 		fmt.Println("Stack name cannot be empty!")
 		flag.Usage()
 		return
+	}
+
+	switch onFailure {
+	case "ROLLBACK", "DELETE", "DO_NOTHING":
+	default:
+		log.Fatal("Valid values for onfail are: ROLLBACK DELETE DO_NOTHING")
 	}
 
 	config := &aws.Config{Region: region}
@@ -247,7 +255,7 @@ func main() {
 		cost(svc, b, params)
 		return
 	} else if provision {
-		provisionStack(svc, b, params, stackName)
+		provisionStack(svc, b, onFailure, params, stackName)
 	} else if desc {
 		descStack(svc, stackName)
 	} else if del {
